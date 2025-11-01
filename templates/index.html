@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image OCR Processor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .upload-section {
+            border: 2px dashed #ccc;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .upload-section.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .file-info {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .progress {
+            width: 100%;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 20px;
+            background-color: #007bff;
+            border-radius: 5px;
+            transition: width 0.3s;
+        }
+        .file-item {
+            margin: 5px 0;
+            padding: 5px;
+            background: #f8f9fa;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ Image OCR Processor</h1>
+        <p>Upload images for enhancement and text recognition</p>
+        
+        <!-- Single File Upload -->
+        <div class="upload-section" id="singleUpload">
+            <h3>Single File Upload</h3>
+            <input type="file" id="singleFile" accept=".tif,.tiff,.png,.jpg,.jpeg,.bmp" style="display: none;">
+            <button class="btn" onclick="document.getElementById('singleFile').click()">Choose File</button>
+            <button class="btn" id="processSingle">Process Image</button>
+            <div class="file-info" id="fileInfo"></div>
+        </div>
+
+        <!-- Batch File Upload -->
+        <div class="upload-section" id="batchUpload">
+            <h3>Batch File Upload</h3>
+            <input type="file" id="batchFiles" multiple accept=".tif,.tiff,.png,.jpg,.jpeg,.bmp" style="display: none;">
+            <button class="btn" onclick="document.getElementById('batchFiles').click()">Choose Files</button>
+            <button class="btn" id="processBatch">Process All</button>
+            <div class="file-info" id="batchFileInfo"></div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress" id="progress">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <!-- Results -->
+        <div class="result" id="result"></div>
+    </div>
+
+    <script>
+        // Single file processing
+        document.getElementById('singleFile').addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                document.getElementById('fileInfo').textContent = `Selected: ${this.files[0].name}`;
+            }
+        });
+
+        document.getElementById('processSingle').addEventListener('click', function() {
+            const fileInput = document.getElementById('singleFile');
+            if (fileInput.files.length === 0) {
+                alert('Please select a file first');
+                return;
+            }
+            processFile(fileInput.files[0]);
+        });
+
+        // Batch file processing
+        document.getElementById('batchFiles').addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                const fileList = Array.from(this.files).map(f => f.name).join(', ');
+                document.getElementById('batchFileInfo').innerHTML = 
+                    `<strong>Selected ${this.files.length} files:</strong><br>${fileList}`;
+            }
+        });
+
+        document.getElementById('processBatch').addEventListener('click', function() {
+            const fileInput = document.getElementById('batchFiles');
+            if (fileInput.files.length === 0) {
+                alert('Please select files first');
+                return;
+            }
+            processBatchFiles(fileInput.files);
+        });
+
+        // Drag and drop functionality
+        const uploadSections = document.querySelectorAll('.upload-section');
+        uploadSections.forEach(section => {
+            section.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('dragover');
+            });
+
+            section.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+            });
+
+            section.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (this.id === 'singleUpload' && files.length > 0) {
+                    document.getElementById('singleFile').files = files;
+                    document.getElementById('fileInfo').textContent = `Selected: ${files[0].name}`;
+                } else if (this.id === 'batchUpload' && files.length > 0) {
+                    document.getElementById('batchFiles').files = files;
+                    const fileList = Array.from(files).map(f => f.name).join(', ');
+                    document.getElementById('batchFileInfo').innerHTML = 
+                        `<strong>Selected ${files.length} files:</strong><br>${fileList}`;
+                }
+            });
+        });
+
+        function processFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            showProgress();
+            disableButtons();
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideProgress();
+                enableButtons();
+                if (data.success) {
+                    showResult(`
+                        <h3>✅ Processing Complete</h3>
+                        <p><strong>File:</strong> ${data.original_filename}</p>
+                        <p><strong>Recognized Text:</strong> ${data.recognized_text || 'No text detected'}</p>
+                        <p><strong>Confidence:</strong> ${data.confidence ? data.confidence.toFixed(1) + '%' : 'N/A'}</p>
+                        <button class="btn" onclick="downloadFile('${data.processed_filename}')">Download Enhanced Image</button>
+                    `, 'success');
+                } else {
+                    showResult(`<h3>❌ Error</h3><p>${data.error}</p>`, 'error');
+                }
+            })
+            .catch(error => {
+                hideProgress();
+                enableButtons();
+                showResult(`<h3>❌ Error</h3><p>${error}</p>`, 'error');
+            });
+        }
+
+        function processBatchFiles(files) {
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+
+            showProgress();
+            disableButtons();
+            
+            fetch('/batch_upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideProgress();
+                enableButtons();
+                if (data.success) {
+                    let resultHTML = `
+                        <h3>✅ Batch Processing Complete</h3>
+                        <p><strong>Total Files:</strong> ${data.total_files}</p>
+                        <p><strong>Successful:</strong> ${data.successful_processing}</p>
+                        <p><strong>Failed:</strong> ${data.failed_processing}</p>
+                        <div style="max-height: 400px; overflow-y: auto; margin-top: 15px;">
+                            <h4>Detailed Results:</h4>
+                    `;
+                    
+                    data.results.forEach((result, index) => {
+                        if (result.success) {
+                            resultHTML += `
+                                <div class="file-item">
+                                    <strong>${result.original_filename}</strong><br>
+                                    Text: "${result.recognized_text || 'No text detected'}"<br>
+                                    Confidence: ${result.confidence ? result.confidence.toFixed(1) + '%' : 'N/A'}
+                                    <button class="btn" onclick="downloadFile('${result.processed_filename}')" style="margin-left: 10px;">Download</button>
+                                </div>
+                            `;
+                        } else {
+                            resultHTML += `
+                                <div class="file-item" style="background: #f8d7da;">
+                                    <strong>${result.original_filename}</strong><br>
+                                    Error: ${result.error}
+                                </div>
+                            `;
+                        }
+                    });
+                    
+                    resultHTML += `</div>`;
+                    showResult(resultHTML, 'success');
+                } else {
+                    showResult(`<h3>❌ Batch Processing Failed</h3><p>${data.error}</p>`, 'error');
+                }
+            })
+            .catch(error => {
+                hideProgress();
+                enableButtons();
+                showResult(`<h3>❌ Error</h3><p>${error}</p>`, 'error');
+            });
+        }
+
+        function downloadFile(filename) {
+            window.open(`/download/${filename}`, '_blank');
+        }
+
+        function showProgress() {
+            document.getElementById('progress').style.display = 'block';
+            document.getElementById('progressBar').style.width = '50%';
+        }
+
+        function hideProgress() {
+            document.getElementById('progressBar').style.width = '100%';
+            setTimeout(() => {
+                document.getElementById('progress').style.display = 'none';
+                document.getElementById('progressBar').style.width = '0%';
+            }, 500);
+        }
+
+        function disableButtons() {
+            document.getElementById('processSingle').disabled = true;
+            document.getElementById('processBatch').disabled = true;
+        }
+
+        function enableButtons() {
+            document.getElementById('processSingle').disabled = false;
+            document.getElementById('processBatch').disabled = false;
+        }
+
+        function showResult(content, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = content;
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+        }
+
+        // Test server connection on load
+        window.addEventListener('load', function() {
+            fetch('/health')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Server health:', data);
+                })
+                .catch(error => {
+                    console.error('Server connection failed:', error);
+                });
+        });
+    </script>
+</body>
+</html>
